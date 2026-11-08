@@ -2,7 +2,7 @@
 
 [README](https://github.com/ttkienn/instagram-chatkit#readme) · **[API](https://github.com/ttkienn/instagram-chatkit/blob/main/docs/DOCS.md)** · [Code structure](https://github.com/ttkienn/instagram-chatkit/blob/main/docs/ARCHITECTURE.md)
 
-Version 3.1.0. See the [README](https://github.com/ttkienn/instagram-chatkit#readme) to install and log in. In the tables, `options?` means optional; methods that send requests usually accept `{ signal }` to cancel the operation.
+Version 3.1.1. See the [README](https://github.com/ttkienn/instagram-chatkit#readme) to install and log in. In the tables, `options?` means optional; methods that send requests usually accept `{ signal }` to cancel the operation.
 
 | Messages | Content | Handling |
 | --- | --- | --- |
