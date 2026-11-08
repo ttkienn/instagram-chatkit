@@ -1,0 +1,12 @@
+node_modules/
+artifacts/
+config.json
+.env
+.env.*
+!.env.example
+.state/
+coverage/
+*.log
+*.tgz
+*.sqlite*
+*.db*
