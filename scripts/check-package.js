@@ -28,9 +28,14 @@ try {
     'src/index.js', 'types/index.d.ts', 'types/bot.d.ts', 'types/advanced.d.ts',
     'docs/DOCS.md', 'docs/ARCHITECTURE.md', 'examples/receive-message.js',
     'scripts/set-private-permissions.ps1',
-    'licenses/THIRD_PARTY_NOTICES.txt', 'licenses/igchat-v2.txt', 'LICENSE',
+    'licenses/igchat-v2.txt', 'LICENSE',
   ]) {
     assert.ok(names.includes(entry), `Missing package file: ${entry}`);
+  }
+  assert.ok(!names.includes('licenses/THIRD_PARTY_NOTICES.txt'), 'Removed NOTICES file is still packaged.');
+  const license = await readFile(join(root, 'LICENSE'), 'utf8');
+  for (const attribution of ['2026 Thiệu Trung Kiên', '2026 Aerogram contributors', '2026 Sheikh Tamim', '0xshijn/igchat-v2']) {
+    assert.ok(license.includes(attribution), `Missing license attribution: ${attribution}`);
   }
   for (const name of names) {
     assert.ok(!/^docs\/(?:API|COMPATIBILITY|MIGRATION|PUBLISHING|guide-[^/]+)\.md$/.test(name), `Old documentation in package: ${name}`);
@@ -87,7 +92,13 @@ assert.equal(typeof client.onMessage, 'function');
 assert.equal(typeof client.messages.sendVoice, 'function');
 assert.equal(typeof client.media.download, 'function');
 let received = 0;
-const removeHandler = client.onMessage(filters.text, message => { assert.equal(message.text, 'fixture'); received++; });
+const removeHandler = client.onMessage(filters.text, message => {
+  assert.equal(message.text, 'fixture');
+  for (const method of ['replyText', 'replyPhoto', 'replyVideo', 'replyVoice', 'replyAttachment']) {
+    assert.equal(typeof message[method], 'function');
+  }
+  received++;
+});
 client.emit('event', { type: 'message', data: { id: '1', senderId: '456', nativeThreadId: '123', text: 'fixture' } });
 await client.waitForHandlers();
 assert.equal(received, 1);

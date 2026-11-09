@@ -36,47 +36,93 @@ In Chrome or Edge, log in to [Instagram](https://www.instagram.com), press F12, 
 IGCHAT_COOKIES="sessionid=...; csrftoken=...; ds_user_id=..."
 ```
 
-## Example
+## Your first bot
 
 Save this as `bot.mjs`:
 
 ```js
 import { InstagramClient } from 'instagram-chatkit';
 
-const client = new InstagramClient({
-  cookies: process.env.IGCHAT_COOKIES,
-  receiving: { receiveOwnMessages: false },
-});
-
-client.onMessage(async function (message) {
-  if (message.text === '/ping') {
-    await message.replyText('pong');
-  }
-});
-
-client.onHandlerError(function (error) {
-  console.error(error.code);
-});
-
 async function main() {
-  await client.login();
-  await client.connectRealtime();
+  const client = new InstagramClient({
+    cookies: process.env.IGCHAT_COOKIES,
+    logger: console,
+    logLevel: 'info',
+  });
+  let stopping = false;
+
+  async function stop() {
+    if (stopping) return;
+    stopping = true;
+
+    try {
+      await client.close();
+      console.log('Bot stopped.');
+    } catch (error) {
+      console.error('Could not stop:', error.code || 'UNKNOWN_ERROR');
+      process.exitCode = 1;
+    }
+  }
+
+  async function handleMessage(message) {
+    if (message.text === '/ping') {
+      await message.replyText('pong');
+      console.log('Replied to /ping.');
+    }
+    if (message.text === '/help') {
+      await message.replyText('Commands: /ping, /help');
+      console.log('Replied to /help.');
+    }
+  }
+
+  client.onMessage(handleMessage);
+  client.onHandlerError(function (error) {
+    console.error('Command failed:', error.cause?.code || error.code);
+  });
+  client.on('state', function (state) {
+    if (state.state === 'connected') {
+      console.log('Bot ready. Send /ping or /help from another account. Ctrl+C to stop.');
+    }
+    if (state.state === 'fatal' || state.state === 'auth_required') {
+      process.exitCode = 1;
+      stop();
+    }
+  });
+
+  process.once('SIGINT', stop);
+  process.once('SIGTERM', stop);
+
+  try {
+    await client.login();
+    if (stopping) return;
+    await client.connectRealtime();
+  } catch (error) {
+    if (!stopping) {
+      console.error('Could not start:', error.code || 'UNKNOWN_ERROR');
+      process.exitCode = 1;
+    }
+
+    await stop();
+  }
 }
 
-main().catch(async function (error) {
-  console.error(error.code);
-  await client.close();
+main().catch(function (error) {
+  console.error('Could not create the client:', error.code || 'UNKNOWN_ERROR');
   process.exitCode = 1;
 });
 ```
 
-Run it, then send `/ping` from another account:
+Run it, wait for `Bot ready`, then send `/ping` or `/help` from another account:
 
 ```bash
 node --env-file=.env bot.mjs
 ```
 
-Call `await client.close()` when your app stops. The [full example](https://github.com/ttkienn/instagram-chatkit/blob/main/examples/receive-message.js) handles Ctrl+C.
+Press Ctrl+C to stop. This is the same code as [examples/receive-message.js](https://github.com/ttkienn/instagram-chatkit/blob/main/examples/receive-message.js); no bot framework or extra dependency is needed.
+
+`logger: console` prints login, connection state, reconnect attempts, request failures, and handler errors. Records include safe metadata such as `event`, `code`, and HTTP status; they do not include cookies or message contents. `Command failed` prints the underlying reply error code. The bot closes on startup failure, Ctrl+C, or a terminal connection state.
+
+To change a reply, edit the strings in `handleMessage`. Add another `if` for a new command. `replyText` quotes the received message. Media replies such as `replyPhoto`, `replyVideo`, and `replyVoice` also need the original web MID; see [reply examples and limits](https://github.com/ttkienn/instagram-chatkit/blob/main/docs/DOCS.md).
 
 ## Documentation
 
@@ -122,4 +168,4 @@ Scan with your banking app and enter the amount you want to send.
 
 ## License
 
-[MIT](https://github.com/ttkienn/instagram-chatkit/blob/main/LICENSE). Code from other projects keeps its original license; see [third-party notices](https://github.com/ttkienn/instagram-chatkit/blob/main/licenses/THIRD_PARTY_NOTICES.txt).
+[MIT](https://github.com/ttkienn/instagram-chatkit/blob/main/LICENSE). Third-party licenses and attribution are included in [LICENSE](https://github.com/ttkienn/instagram-chatkit/blob/main/LICENSE).

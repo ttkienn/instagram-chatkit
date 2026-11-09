@@ -60,9 +60,9 @@ export interface AttachmentOptions extends RequestOptions {
   attachmentId: Id | Id[]; type?: 'gif' | 'image' | 'video' | 'file' | 'audio'; content?: string; replyToMessageId?: Id; clientContext?: string;
 }
 export interface MessagesApi {
-  sendPhoto(nativeThreadId: NativeThreadId, data: Uint8Array, options?: RequestOptions & { mimeType?: 'image/jpeg' | 'image/png' }): Promise<SentMessage>;
-  sendVideo(nativeThreadId: NativeThreadId, data: Uint8Array, options?: RequestOptions & { mimeType?: string }): Promise<SentMessage>;
-  sendVoice(nativeThreadId: NativeThreadId, data: Uint8Array, options?: RequestOptions & { mimeType?: string }): Promise<SentMessage>;
+  sendPhoto(nativeThreadId: NativeThreadId, data: Uint8Array, options?: RequestOptions & { mimeType?: 'image/jpeg' | 'image/png'; replyToMessageId?: Id }): Promise<SentMessage>;
+  sendVideo(nativeThreadId: NativeThreadId, data: Uint8Array, options?: RequestOptions & { mimeType?: string; replyToMessageId?: Id }): Promise<SentMessage>;
+  sendVoice(nativeThreadId: NativeThreadId, data: Uint8Array, options?: RequestOptions & { mimeType?: string; replyToMessageId?: Id }): Promise<SentMessage>;
   send(threadFbid: ThreadFbid, text: string, options?: RequestOptions & { replyToMessageId?: Id; replyToUserId?: MessagingUserFbid }): Promise<SentMessage>;
   edit(threadFbid: ThreadFbid, messageId: Id, text: string, options?: RequestOptions): Promise<ProviderObject>;
   unsend(threadFbid: ThreadFbid, messageId: Id, options?: RequestOptions): Promise<ProviderObject>;
@@ -73,7 +73,7 @@ export interface MessagesApi {
   sendImageToUser(username: string, imagePath: string, options?: SendImageOptions): Promise<NativeSentMessage>;
   sendVideoToUser(username: string, videoPath: string, options?: SendVideoOptions): Promise<NativeSentMessage>;
   broadcast(options: BroadcastOptions): Promise<NativeSentMessage>;
-  sendToGroup(threadId: NativeThreadId, text: string, options?: SendToUserOptions): Promise<NativeSentMessage>;
+  sendToGroup(threadId: NativeThreadId, text: string, options?: SendToUserOptions & { replyToMessageId?: Id }): Promise<NativeSentMessage>;
   markSeen(threadId: NativeThreadId, messageId: string, options?: RequestOptions): Promise<StatusResponse>;
   deleteItem(threadId: NativeThreadId, messageId: string, options?: RequestOptions): Promise<StatusResponse>;
 }

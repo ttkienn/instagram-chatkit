@@ -18,7 +18,10 @@ async function useClient() {
   await client.search.all('coffee', { signal });
   const sent = await client.messages.send('123', 'hello', { signal });
   const messageId: string = sent.messageId;
+  await client.messages.sendToGroup('123', 'reply', { replyToMessageId: messageId, signal });
   await client.messages.sendPhoto('123', new Uint8Array([255, 216, 255]), { mimeType: 'image/jpeg', signal });
+  await client.messages.sendVoice('123', new Uint8Array([1]), { replyToMessageId: messageId, signal });
+  await client.messages.sendVideo('123', new Uint8Array([1]), { replyToMessageId: messageId, signal });
   await client.threads.history('123', { limit: 10, signal });
   await client.media.info('123', { signal });
   const realtime = await client.connectRealtime({ reconnectPolicy: new ReconnectPolicy({ maxAttempts: 2 }) });
@@ -32,6 +35,10 @@ const unsubscribe = client.onMessage(filters.all(filters.text, filters.incoming)
   const text: string = message.text;
   const sameClient: InstagramClient = owner;
   await message.replyText(text);
+  await message.replyPhoto(new Uint8Array([255, 216, 255]), { mimeType: 'image/jpeg', signal });
+  await message.replyVideo(new Uint8Array([1]), { mimeType: 'video/mp4', signal });
+  await message.replyVoice(new Uint8Array([1]), { mimeType: 'audio/mp4', signal });
+  await message.replyAttachment({ attachmentId: '123', type: 'gif', signal });
   void sameClient;
 }, { group: 1 });
 client.onHandlerError(error => { const code: string = error.code; void code; });

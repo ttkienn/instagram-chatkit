@@ -49,12 +49,40 @@ export class ReceivedMessage {
     this.#assert();
     text(content, 'text', { max: 10000 });
     signal?.throwIfAborted();
-    if (this.nativeThreadId != null && typeof this.#client.realtime?.sendText === 'function') {
-      return this.#confirm(this.#client.realtime.sendText(this.nativeThreadId, content, { signal }));
+    if (this.nativeThreadId != null && this.itemId != null && typeof this.#client.realtime?.sendText === 'function') {
+      return this.#confirm(this.#client.realtime.sendText(this.nativeThreadId, content, {
+        replyToId: String(this.itemId),
+        ...(this.clientContext != null ? { replyToClientContext: this.clientContext } : {}),
+        signal,
+      }));
     }
-    if (this.threadFbid != null) return this.#confirm(this.#client.messages.send(this.threadFbid, content, { signal }));
-    if (this.nativeThreadId != null) return this.#confirm(this.#client.messages.sendToGroup(this.nativeThreadId, content, { signal }));
+    const replyToMessageId = this.#mid();
+    if (this.threadFbid != null) return this.#confirm(this.#client.messages.send(this.threadFbid, content, { replyToMessageId, signal }));
+    if (this.nativeThreadId != null) return this.#confirm(this.#client.messages.sendToGroup(this.nativeThreadId, content, { replyToMessageId, signal }));
     throw new ValidationError('The message has no confirmed destination ID.');
+  }
+
+  async replyPhoto(data, options = {}) { return this.#replyMedia('sendPhoto', data, options); }
+  async replyVideo(data, options = {}) { return this.#replyMedia('sendVideo', data, options); }
+  async replyVoice(data, options = {}) { return this.#replyMedia('sendVoice', data, options); }
+
+  async #replyMedia(method, data, { signal, ...options }) {
+    this.#assert();
+    const replyToMessageId = this.#mid();
+    signal?.throwIfAborted();
+    const native = this.nativeThreadId ?? (await this.getThread({ signal })).thread_id;
+    this.#assert();
+    return this.#confirm(this.#client.messages[method](positiveId(native, 'nativeThreadId'), data, { ...options, replyToMessageId, signal }));
+  }
+
+  async replyAttachment(options = {}) {
+    this.#assert();
+    const replyToMessageId = this.#mid();
+    options.signal?.throwIfAborted();
+    const thread = this.threadFbid == null ? await this.getThread({ signal: options.signal }) : null;
+    const fbid = positiveId(this.threadFbid ?? thread?.thread_fbid ?? thread?.id, 'threadFbid');
+    this.#assert();
+    return this.#confirm(this.#client.messages.sendAttachment(fbid, { ...options, replyToMessageId }));
   }
 
   #mid() {

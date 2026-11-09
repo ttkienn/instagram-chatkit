@@ -1,40 +1,49 @@
-import { InstagramClient, filters } from 'instagram-chatkit';
+import { InstagramClient } from 'instagram-chatkit';
 
 async function main() {
-  const cookies = process.env.IGCHAT_COOKIES;
+  const client = new InstagramClient({
+    cookies: process.env.IGCHAT_COOKIES,
+    logger: console,
+    logLevel: 'info',
+  });
+  let stopping = false;
 
-  if (!cookies) {
-    console.error('Đặt IGCHAT_COOKIES trong .env rồi chạy với node --env-file=.env.');
-    process.exitCode = 1;
-    return;
-  }
+  async function stop() {
+    if (stopping) return;
+    stopping = true;
 
-  const client = new InstagramClient({ cookies: cookies });
-  let closePromise;
-
-  function stop() {
-    if (!closePromise) {
-      closePromise = client.close().catch(function (error) {
-        console.error('Không đóng được client:', error.code || 'UNKNOWN_ERROR');
-        process.exitCode = 1;
-      });
+    try {
+      await client.close();
+      console.log('Bot stopped.');
+    } catch (error) {
+      console.error('Could not stop:', error.code || 'UNKNOWN_ERROR');
+      process.exitCode = 1;
     }
-
-    return closePromise;
   }
 
-  const ping = filters.all(filters.incoming, filters.command('ping'));
+  async function handleMessage(message) {
+    if (message.text === '/ping') {
+      await message.replyText('pong');
+      console.log('Replied to /ping.');
+    }
+    if (message.text === '/help') {
+      await message.replyText('Commands: /ping, /help');
+      console.log('Replied to /help.');
+    }
+  }
 
-  client.onMessage(ping, async function (message) {
-    await message.replyText('pong');
-  });
-
+  client.onMessage(handleMessage);
   client.onHandlerError(function (error) {
-    console.error('Lỗi xử lý lệnh:', error.code);
+    console.error('Command failed:', error.cause?.code || error.code);
   });
-
-  client.on('listenerError', function (error) {
-    console.error('Lỗi kết nối:', error.code);
+  client.on('state', function (state) {
+    if (state.state === 'connected') {
+      console.log('Bot ready. Send /ping or /help from another account. Ctrl+C to stop.');
+    }
+    if (state.state === 'fatal' || state.state === 'auth_required') {
+      process.exitCode = 1;
+      stop();
+    }
   });
 
   process.once('SIGINT', stop);
@@ -42,16 +51,11 @@ async function main() {
 
   try {
     await client.login();
-    if (closePromise) return;
-
+    if (stopping) return;
     await client.connectRealtime();
-
-    if (!closePromise) {
-      console.log('Đang nhận tin. Gửi /ping từ tài khoản khác để thử. Nhấn Ctrl+C để dừng.');
-    }
   } catch (error) {
-    if (!closePromise) {
-      console.error('Không khởi động được:', error.code || 'UNKNOWN_ERROR');
+    if (!stopping) {
+      console.error('Could not start:', error.code || 'UNKNOWN_ERROR');
       process.exitCode = 1;
     }
 
@@ -60,6 +64,6 @@ async function main() {
 }
 
 main().catch(function (error) {
-  console.error('Không tạo được client:', error.code || 'UNKNOWN_ERROR');
+  console.error('Could not create the client:', error.code || 'UNKNOWN_ERROR');
   process.exitCode = 1;
 });

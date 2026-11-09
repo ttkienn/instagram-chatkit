@@ -34,47 +34,93 @@ Trên Chrome hoặc Edge, đăng nhập [Instagram](https://www.instagram.com), 
 IGCHAT_COOKIES="sessionid=...; csrftoken=...; ds_user_id=..."
 ```
 
-## Ví dụ
+## Bot đầu tiên
 
 Lưu code sau thành `bot.mjs`:
 
 ```js
 import { InstagramClient } from 'instagram-chatkit';
 
-const client = new InstagramClient({
-  cookies: process.env.IGCHAT_COOKIES,
-  receiving: { receiveOwnMessages: false },
-});
-
-client.onMessage(async function (message) {
-  if (message.text === '/ping') {
-    await message.replyText('pong');
-  }
-});
-
-client.onHandlerError(function (error) {
-  console.error(error.code);
-});
-
 async function main() {
-  await client.login();
-  await client.connectRealtime();
+  const client = new InstagramClient({
+    cookies: process.env.IGCHAT_COOKIES,
+    logger: console,
+    logLevel: 'info',
+  });
+  let stopping = false;
+
+  async function stop() {
+    if (stopping) return;
+    stopping = true;
+
+    try {
+      await client.close();
+      console.log('Bot stopped.');
+    } catch (error) {
+      console.error('Could not stop:', error.code || 'UNKNOWN_ERROR');
+      process.exitCode = 1;
+    }
+  }
+
+  async function handleMessage(message) {
+    if (message.text === '/ping') {
+      await message.replyText('pong');
+      console.log('Replied to /ping.');
+    }
+    if (message.text === '/help') {
+      await message.replyText('Commands: /ping, /help');
+      console.log('Replied to /help.');
+    }
+  }
+
+  client.onMessage(handleMessage);
+  client.onHandlerError(function (error) {
+    console.error('Command failed:', error.cause?.code || error.code);
+  });
+  client.on('state', function (state) {
+    if (state.state === 'connected') {
+      console.log('Bot ready. Send /ping or /help from another account. Ctrl+C to stop.');
+    }
+    if (state.state === 'fatal' || state.state === 'auth_required') {
+      process.exitCode = 1;
+      stop();
+    }
+  });
+
+  process.once('SIGINT', stop);
+  process.once('SIGTERM', stop);
+
+  try {
+    await client.login();
+    if (stopping) return;
+    await client.connectRealtime();
+  } catch (error) {
+    if (!stopping) {
+      console.error('Could not start:', error.code || 'UNKNOWN_ERROR');
+      process.exitCode = 1;
+    }
+
+    await stop();
+  }
 }
 
-main().catch(async function (error) {
-  console.error(error.code);
-  await client.close();
+main().catch(function (error) {
+  console.error('Could not create the client:', error.code || 'UNKNOWN_ERROR');
   process.exitCode = 1;
 });
 ```
 
-Chạy và gửi `/ping` từ tài khoản khác:
+Chạy, đợi dòng `Bot ready`, rồi gửi `/ping` hoặc `/help` từ tài khoản khác:
 
 ```bash
 node --env-file=.env bot.mjs
 ```
 
-Khi dừng ứng dụng, gọi `await client.close()`. [Ví dụ đầy đủ](https://github.com/ttkienn/instagram-chatkit/blob/main/examples/receive-message.js) đã có xử lý Ctrl+C.
+Nhấn Ctrl+C để dừng. Code giống [examples/receive-message.js](https://github.com/ttkienn/instagram-chatkit/blob/main/examples/receive-message.js), không cần framework bot hay cài thêm thư viện.
+
+`logger: console` ghi log đăng nhập, trạng thái kết nối, lần kết nối lại, lỗi request và lỗi xử lý lệnh. Log chỉ có thông tin như `event`, `code`, HTTP status; không có cookie hay nội dung tin nhắn. Dòng `Command failed` hiển thị mã lỗi gốc của thao tác reply. Bot đóng kết nối khi khởi động lỗi, nhấn Ctrl+C hoặc kết nối dừng ở trạng thái cuối.
+
+Muốn đổi câu trả lời, sửa chuỗi trong `handleMessage`. Muốn thêm lệnh, thêm một `if`. `replyText` trích dẫn tin nhắn đang nhận. Reply ảnh, video, voice qua `replyPhoto`, `replyVideo`, `replyVoice` còn cần web MID của tin gốc; xem [ví dụ và giới hạn reply](https://github.com/ttkienn/instagram-chatkit/blob/main/docs/DOCS.md).
 
 ## Tài liệu
 
@@ -120,4 +166,4 @@ Quét QR bằng ứng dụng ngân hàng và nhập số tiền bạn muốn g�
 
 ## Giấy phép
 
-[MIT](https://github.com/ttkienn/instagram-chatkit/blob/main/LICENSE). Các phần từ dự án khác giữ giấy phép gốc; xem [thông tin bản quyền](https://github.com/ttkienn/instagram-chatkit/blob/main/licenses/THIRD_PARTY_NOTICES.txt).
+[MIT](https://github.com/ttkienn/instagram-chatkit/blob/main/LICENSE). Giấy phép và ghi nhận tác giả của các phần từ dự án khác được giữ trong [LICENSE](https://github.com/ttkienn/instagram-chatkit/blob/main/LICENSE).

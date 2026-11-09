@@ -23,32 +23,34 @@ export class MessagesApi {
     this.#getInboxContext = getInboxContext;
   }
 
-  async sendPhoto(nativeThreadId, data, { mimeType = 'image/jpeg', signal } = {}) {
+  async sendPhoto(nativeThreadId, data, { mimeType = 'image/jpeg', replyToMessageId, signal } = {}) {
     const native = positiveId(nativeThreadId, 'nativeThreadId');
     validateWebPhoto(data, mimeType);
+    if (replyToMessageId !== undefined) webMessageId(replyToMessageId);
     if (typeof this.#getInboxContext !== 'function') throw new ValidationError('Web messaging context is required. Use InstagramClient.');
     const context = await this.#getInboxContext({ signal });
     const threadFbid = messagingThreadFromInbox(context.result, native);
-    return this.#publishMedia(threadFbid, data, context, { mimeType, signal });
+    return this.#publishMedia(threadFbid, data, context, { mimeType, replyToMessageId, signal });
   }
 
-  async sendVideo(nativeThreadId, data, { mimeType = 'video/mp4', signal } = {}) {
-    return this.#sendNativeMedia(nativeThreadId, data, { mimeType, signal }, 'video/');
+  async sendVideo(nativeThreadId, data, { mimeType = 'video/mp4', replyToMessageId, signal } = {}) {
+    return this.#sendNativeMedia(nativeThreadId, data, { mimeType, replyToMessageId, signal }, 'video/');
   }
 
-  async sendVoice(nativeThreadId, data, { mimeType = 'audio/mp4', signal } = {}) {
-    return this.#sendNativeMedia(nativeThreadId, data, { mimeType, voice: true, signal }, 'audio/');
+  async sendVoice(nativeThreadId, data, { mimeType = 'audio/mp4', replyToMessageId, signal } = {}) {
+    return this.#sendNativeMedia(nativeThreadId, data, { mimeType, voice: true, replyToMessageId, signal }, 'audio/');
   }
 
   async #sendNativeMedia(threadId, data, options, prefix) {
     const nativeThreadId = positiveId(threadId, 'nativeThreadId');
     validateAttachment(data, options.mimeType, options.voice ?? false);
     if (!options.mimeType.startsWith(prefix)) throw new ValidationError('The media MIME type does not match the send method.');
+    if (options.replyToMessageId !== undefined) webMessageId(options.replyToMessageId);
     const { fbid, context } = await this.#thread(nativeThreadId, options.signal);
     return this.#publishMedia(fbid, data, context, options);
   }
 
-  async #publishMedia(threadFbid, data, context, { mimeType, voice = false, signal }) {
+  async #publishMedia(threadFbid, data, context, { mimeType, voice = false, replyToMessageId, signal }) {
     context.checkSession();
     const { attachmentId } = await uploadWebAttachment(this.#http, data, { context, mimeType, voice, signal });
     context.checkSession();
@@ -61,7 +63,7 @@ export class MessagesApi {
       doc_id: '25766288509716264',
       variables: JSON.stringify({
         attachment_fbid: attachmentId,
-        reply_to_message_id: null,
+        reply_to_message_id: replyToMessageId === undefined ? null : webMessageId(replyToMessageId),
         forwarded_from_thread_id: null,
         is_forwarded_from_own_message: null,
         offline_threading_id: offlineId,
@@ -171,13 +173,14 @@ export class MessagesApi {
     return this.#nativeResult(await this.#sendText(variables, signal));
   }
 
-  async sendToGroup(threadId, content, { clientContext, signal } = {}) {
+  async sendToGroup(threadId, content, { clientContext, replyToMessageId, signal } = {}) {
     const nativeThreadId = positiveId(threadId, 'threadId');
     const offlineId = this.#sendContext(clientContext);
     text(content, 'message', { max: 10000 });
+    if (replyToMessageId !== undefined) webMessageId(replyToMessageId);
     const { fbid: threadFbid, context: webContext } = await this.#thread(nativeThreadId, signal);
     webContext.checkSession();
-    const variables = textMessageData(threadFbid, content, offlineId);
+    const variables = textMessageData(threadFbid, content, offlineId, { replyToMessageId });
     const sent = await this.#sendText(variables, signal, webContext.checkSession);
     return this.#nativeResult(sent, nativeThreadId);
   }

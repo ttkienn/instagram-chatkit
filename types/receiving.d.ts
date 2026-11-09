@@ -17,6 +17,10 @@ export interface ReceivedMessage extends IncomingMessage {
   newText?: string;
   getThread(options?: RequestOptions): Promise<DirectThread>;
   replyText(text: string, options?: RequestOptions): Promise<SentMessage | IrisSendResult>;
+  replyPhoto(data: Uint8Array, options?: RequestOptions & { mimeType?: 'image/jpeg' | 'image/png' }): Promise<SentMessage>;
+  replyVideo(data: Uint8Array, options?: RequestOptions & { mimeType?: string }): Promise<SentMessage>;
+  replyVoice(data: Uint8Array, options?: RequestOptions & { mimeType?: string }): Promise<SentMessage>;
+  replyAttachment(options: Omit<import('./features.js').AttachmentOptions, 'replyToMessageId'>): Promise<SentMessage>;
   markSeen(options?: RequestOptions): Promise<ProviderObject>;
   react(emoji: string, options?: RequestOptions & { remove?: boolean }): Promise<ProviderObject>;
   downloadMedia(options?: import('./features.js').DownloadMediaOptions): Promise<string>;

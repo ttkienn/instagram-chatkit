@@ -2,7 +2,7 @@
 
 [README](https://github.com/ttkienn/instagram-chatkit#readme) · **[API](https://github.com/ttkienn/instagram-chatkit/blob/main/docs/DOCS.md)** · [Code structure](https://github.com/ttkienn/instagram-chatkit/blob/main/docs/ARCHITECTURE.md)
 
-Version 3.1.1. See the [README](https://github.com/ttkienn/instagram-chatkit#readme) to install and log in. In the tables, `options?` means optional; methods that send requests usually accept `{ signal }` to cancel the operation.
+Requires Node.js 24 or newer. See the [README](https://github.com/ttkienn/instagram-chatkit#readme) to install and log in, and [package.json](https://github.com/ttkienn/instagram-chatkit/blob/main/package.json) for the package version. In the tables, `options?` means optional; methods that send requests usually accept `{ signal }` to cancel the operation.
 
 | Messages | Content | Handling |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ These IDs are not interchangeable. Do not infer an FBID from a Direct thread ID'
 | `messages.unsend(threadFbid, messageId, options?)` | Messaging FBID and web MID |
 | `messages.react(threadFbid, messageId, emoji, options?)` | Web MID; use `remove: true` to remove a reaction |
 | `messages.sendToUser(username, text, options?)` | Find the exact username; may open a new DM |
-| `messages.sendToGroup(nativeThreadId, text, options?)` | Direct thread ID; also works for DMs |
+| `messages.sendToGroup(nativeThreadId, text, options?)` | Direct thread ID; also works for DMs; accepts `replyToMessageId` to quote a web MID |
 | `messages.markSeen/deleteItem(nativeThreadId, messageId, options?)` | Mark as read/unsend; requires a web MID |
 | `messages.broadcast(options)` | `item: 'text'`, `form: { text }`, and exactly one of `threadIds/userIds` |
 
@@ -68,16 +68,26 @@ Send methods wait for confirmation from Instagram and return a message ID. If yo
 
 ## Receive messages and events
 
+Start with [examples/receive-message.js](https://github.com/ttkienn/instagram-chatkit/blob/main/examples/receive-message.js) for a complete bot with cookies from `.env`, console logs, startup error handling, and Ctrl+C cleanup. A command handler is a regular function with `if` statements:
+
 ```js
 import { filters } from 'instagram-chatkit';
 
-client.onMessage(filters.incoming, async function (message) {
+async function handleMessage(message) {
   if (message.text === '/ping') {
     await message.replyText('Pong!');
   }
-});
+
+  if (message.text === '/help') {
+    await message.replyText('Commands: /ping, /help');
+  }
+}
+
+client.onMessage(filters.incoming, handleMessage);
 await client.connectRealtime();
 ```
+
+Register handlers before connecting. `connectRealtime()` logs in if needed and resolves after the Iris subscription is ready. Test from another Instagram account: `filters.incoming` skips the bot's own messages.
 
 Registration methods accept `(handler, options?)` or `(filter, handler, options?)`. Handlers receive `(data, client)` and may be async. Registration returns a function that removes the handler.
 
@@ -90,7 +100,7 @@ Registration methods accept `(handler, options?)` or `(filter, handler, options?
 
 Options include `group`, defaulting to 0. For each event, only the first matching handler in each group runs, ordered by ascending group number and then registration order. Use different groups to let multiple handlers receive the same message.
 
-Your own messages are included by default; use `filters.incoming` or `receiving: { receiveOwnMessages: false }` to skip them. The default queue size is 1000, with at most 256 registered handlers. When the queue is full, new data is dropped.
+Your own messages are included by default; use `filters.incoming` or `receiving: { receiveOwnMessages: false }` to skip them. Events and their handlers run in order, so a long-running handler delays later messages. The default queue size is 1000, with at most 256 registered handlers. When the queue is full, new data is dropped and `HANDLER_QUEUE_FULL` is reported.
 
 ### Message data
 
@@ -98,15 +108,41 @@ A message may include `text/senderId/nativeThreadId/threadFbid/itemId/messageId/
 
 | Method | Purpose |
 | --- | --- |
-| `replyText(text, options?)`, `getThread(options?)` | Reply in the same thread without quoting / get thread details |
+| `replyText(text, options?)`, `getThread(options?)` | Reply quoting this message / get thread details |
+| `replyPhoto/replyVideo/replyVoice(bytes, options?)` | Reply with JPEG/PNG, video, or voice, quoting this message; accepts `mimeType/signal` |
+| `replyAttachment(options)` | Quote this message with an uploaded attachment; accepts the same options as `messages.sendAttachment()` except `replyToMessageId` |
 | `markSeen(options?)`, `react(emoji, options?)` | Require a real web MID; react accepts `remove: true` to remove the reaction |
 | `downloadMedia(options?)` | Download from an available URL; does not search history for one |
 
-`messageId` may be a fallback item ID; methods that require a MID reject the call until a real web MID is available. After cookies or accounts change, methods on old messages report `SESSION_CHANGED`.
+`replyText()` uses the original Iris item ID over realtime, or a real web MID over HTTP. If the required ID is unavailable, it rejects the call instead of sending an unquoted message. `messageId` may be a fallback item ID; methods that require a MID reject the call until a real web MID is available. After cookies or accounts change, methods on old messages report `SESSION_CHANGED`.
+
+Media replies require a real web MID on the original message. Iris events containing only an item ID cannot be used for media replies; these methods reject before uploading. The quoted message may itself contain text, a photo, video, or voice.
+
+```js
+await message.replyPhoto(jpegBytes);
+await message.replyVideo(mp4Bytes);
+await message.replyVoice(m4aBytes);
+await message.replyAttachment({ attachmentId: uploaded.uploadId, type: 'image' });
+```
 
 ### Connection events
 
 `client.on('state', handler)` receives `state/attempt/nextRetryIn/reason`. `client.on('listenerError', handler)` receives connection errors. `client.on('event', handler)` receives `{ type, data }`, including messages, reactions, readReceipt, and thread changes when Iris sends them. Use `onMessage/onHandlerError` to have the library catch errors from async handlers.
+
+| State | Meaning |
+| --- | --- |
+| `starting` | Connecting and subscribing to Iris |
+| `connected` | Ready to receive events and send realtime messages |
+| `reconnecting` | A retryable connection failure; `nextRetryIn` is the wait in milliseconds |
+| `auth_required` | Authentication failed; renew browser cookies before reconnecting |
+| `fatal` | Connection stopped after a nonretryable failure or the retry limit |
+| `stopped` | Realtime was closed |
+
+Reconnect is enabled by default for retryable failures. Avoid starting another connection on every `reconnecting` event. After `fatal` or `auth_required`, call `disconnectRealtime()` before starting a fresh listener; update expired cookies first.
+
+### Stop the bot
+
+Use `await client.close()` on Ctrl+C or startup failure. Closing is idempotent, cancels HTTP/realtime work, and clears queued handlers; it does not log out or erase saved cookies. For a planned shutdown that finishes queued handlers, first `await client.disconnectRealtime()`, then `await client.waitForHandlers()`, then `await client.close()`. Create a new client after closing.
 
 ## Filters
 
@@ -136,7 +172,7 @@ await client.messages.sendPhoto(nativeThreadId, image, {
 
 | Method | Purpose |
 | --- | --- |
-| `messages.sendPhoto/sendVideo/sendVoice(nativeThreadId, bytes, options?)` | Send JPEG/PNG, video, or voice; default MIME types are `image/jpeg`, `video/mp4`, `audio/mp4` |
+| `messages.sendPhoto/sendVideo/sendVoice(nativeThreadId, bytes, options?)` | Send JPEG/PNG, video, or voice; default MIME types are `image/jpeg`, `video/mp4`, `audio/mp4`; accepts `replyToMessageId` to quote a web MID |
 | `messages.sendImageToUser(username, path, options?)` | Send an image file to a DM |
 | `messages.sendVideoToUser(username, path, options?)` | Send a video; options include `durationMs/width/height/clientContext` |
 | `messages.upload(bytes, options?)` | Upload a file and return `{ uploadId, mediaType }`; options include `mimeType/voice` |
@@ -148,7 +184,7 @@ await client.messages.sendPhoto(nativeThreadId, image, {
 | `media.save(target, enabled, options?)` | Save/unsave; `enabled` defaults to true |
 | `media.download(url, options?)` | Download from a CDN and return the path; options include `path/maxBytes/timeoutMs/signal` |
 
-Sending by Direct thread ID requires a matching FBID in the current inbox; it does not page through older threads. If none is found, it reports `THREAD_NOT_FOUND` before uploading the file. Media captions are not supported; send one attachment at a time. The library does not convert video or audio formats.
+Sending by Direct thread ID requires a matching messaging FBID. `sendPhoto()` checks the current inbox result; `sendVideo()` and `sendVoice()` use the paginated thread lookup described below. If no matching thread is found, they report `THREAD_NOT_FOUND` before uploading the file. Media captions are not supported; send one attachment at a time. The library does not convert video or audio formats.
 
 `target` accepts an ID, a post shortcode, or an Instagram link. Use `next_max_id` to read more comments. Downloads default to 100 MiB/30 seconds and accept only allowed HTTPS CDNs, without sending cookies or overwriting files. Received messages may lack a download URL.
 
@@ -204,7 +240,26 @@ For the first page, omit maxId or pass null. Use `next_max_id` to read more. Sea
 
 ## Logging
 
-Logging is off by default. Pass `logger: function (record) { console.log(record); }` and `logLevel: 'info'` to enable it. Logs include `time/level/event` and state/error details, without cookies, tokens, or message content. Your app can add colors or write logs to files.
+Logging is off by default. Enable the built-in records when creating the client:
+
+```js
+const client = new InstagramClient({
+  cookies: process.env.IGCHAT_COOKIES,
+  logger: console,
+  logLevel: 'info',
+});
+```
+
+| Event | What it tells you |
+| --- | --- |
+| `session.loginStarted/loginCompleted/loginFailed` | Login progress and failure code |
+| `realtime.stateChanged` | Connection state, retry attempt, and delay |
+| `realtime.failed` | Terminal connection failure |
+| `receiving.handlerFailed` | A filter or handler failed |
+| `http.requestFailed` | Request failure, HTTP status when available, and duration |
+| `client.closed` | Shutdown finished |
+
+Levels are `debug/info/warn/error`; `logLevel` is the minimum level to emit. Use `debug` to include `http.requestCompleted` and `receiving.updateReceived`. Records contain `time/level/event` and selected state/error metadata, without cookies, tokens, request URLs, or message content. A logger callback can format or save these records; logger exceptions do not stop the client. `logger: false` disables logging.
 
 ## Errors
 
@@ -216,6 +271,18 @@ Logging is off by default. Pass `logger: function (record) { console.log(record)
 | `DELIVERY_UNKNOWN` | Check the actual result before retrying |
 | `SESSION_CHANGED`, `HANDLER_QUEUE_FULL` | Get fresh data after changing sessions / reduce waiting in handlers |
 | `UNSUPPORTED_OPERATION` | The method is not supported yet |
+
+Errors thrown by a filter or handler are reported as `HANDLER_ERROR`; inspect `error.cause` for the original error and its code. For example, use `onHandlerError()` when the app needs to react to a failed reply:
+
+```js
+client.onHandlerError(function (error) {
+  if (error.cause && error.cause.code === 'DELIVERY_UNKNOWN') {
+    console.error('Check the conversation before sending that reply again.');
+  }
+});
+```
+
+Built-in logging already records handler and connection failures when enabled. Avoid logging whole errors, raw events, cookies, or session objects if your bot handles private conversations.
 
 ## Not supported yet
 
