@@ -62,6 +62,7 @@ export class MqttListener extends EventEmitter {
   #usedContexts = new Map();
   #pending = new Map();
   #connectedAt = 0;
+  #seededThreads = false;
   #sync = new SyncState();
   #closePromise;
 
@@ -160,7 +161,14 @@ export class MqttListener extends EventEmitter {
     if (this.#profile && this.#profile.actorId !== actorId) {
       throw new AuthenticationError('The Instagram account changed. Create a new realtime connection.', { code: 'SESSION_CHANGED' });
     }
-    const bootstrap = { sequenceId: value.sequenceId, snapshotAtMs: value.snapshotAtMs, actorId, deviceId };
+    if (value.threads !== undefined && (!Array.isArray(value.threads) || value.threads.length > 1000)) {
+      throw new ValidationError('bootstrap.threads must contain at most 1000 thread snapshots.');
+    }
+    const threads = (value.threads ?? []).map(thread => {
+      if (!thread || typeof thread !== 'object' || Array.isArray(thread)) throw new ValidationError('Invalid bootstrap thread snapshot.');
+      return { ...thread, thread_id: positiveId(thread.thread_id, 'bootstrap thread_id') };
+    });
+    const bootstrap = { sequenceId: value.sequenceId, snapshotAtMs: value.snapshotAtMs, actorId, deviceId, threads };
     this.#sync.setBootstrap(bootstrap);
     this.#profile = { actorId, deviceId };
     return bootstrap;
@@ -225,6 +233,16 @@ export class MqttListener extends EventEmitter {
             if (cycle.ready) return;
             cycle.ready = true;
             clearTimeout(timer);
+            if (!this.#seededThreads) {
+              for (const thread of bootstrap.threads) {
+                this.emit('event', { type: 'threadUpdate', data: {
+                  id: thread.thread_id, threadId: thread.thread_id, nativeThreadId: thread.thread_id,
+                  change: 'snapshot', initial: true, sequence: String(bootstrap.sequenceId), raw: thread,
+                } });
+                if (!active()) return;
+              }
+              this.#seededThreads = true;
+            }
             this.#connectedAt = Date.now();
             this.#setState('connected');
             this.#resolveStart?.(this);

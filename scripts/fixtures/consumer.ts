@@ -42,6 +42,11 @@ const unsubscribe = client.onMessage(filters.all(filters.text, filters.incoming)
   void sameClient;
 }, { group: 1 });
 client.onHandlerError(error => { const code: string = error.code; void code; });
+client.onThreadUpdate(update => {
+  const threadId: string | number | bigint = update.nativeThreadId;
+  const property: string | undefined = update.property;
+  void [threadId, property, update.initial];
+});
 unsubscribe();
 const bot = new SimpleBot({ client, admins: ['123'] });
 const command: BotCommand = { name: 'custom', usage: 'custom', admin: true, run: async context => context.reply('hello') };

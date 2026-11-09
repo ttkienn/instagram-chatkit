@@ -188,5 +188,9 @@ function bootstrapFromContext({ result, deviceId, actorId }) {
   if ((rawSnapshot != null && !['number', 'string'].includes(typeof rawSnapshot)) ||
       (typeof rawSnapshot === 'string' && !/^\d+$/.test(rawSnapshot)) ||
       !Number.isSafeInteger(snapshotAtMs) || snapshotAtMs <= 0) throw invalidResponse();
-  return { sequenceId, snapshotAtMs, deviceId, actorId };
+  const edges = result.data?.get_slide_mailbox_for_iris_subscription?.threads_by_folder?.edges;
+  const threads = Array.isArray(edges)
+    ? edges.slice(0, 1000).map(edge => edge?.node?.as_ig_direct_thread).filter(thread => thread && thread.thread_id != null)
+    : [];
+  return { sequenceId, snapshotAtMs, deviceId, actorId, threads };
 }

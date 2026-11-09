@@ -1,4 +1,4 @@
-import type { Id, NativeThreadId, ProviderObject, WebSession } from './common.js';
+import type { DirectThread, Id, NativeThreadId, ProviderObject, WebSession } from './common.js';
 import type { ReconnectPolicy, InstagramError } from './index.js';
 
 export interface ConnectionState {
@@ -20,11 +20,17 @@ export interface IncomingMessage extends ProviderObject {
   itemId?: string; itemType?: string; threadFbid?: string; fromMe?: boolean; isGroup?: boolean; nativeDirect?: boolean;
   media?: Attachment; reactions?: MessageReaction[]; raw?: ProviderObject;
 }
+export interface ThreadUpdate extends ProviderObject {
+  id: NativeThreadId; threadId: NativeThreadId; nativeThreadId: NativeThreadId;
+  change: 'snapshot' | 'add' | 'replace' | 'remove'; property?: string; sequence?: Id;
+  initial?: boolean; raw?: unknown;
+}
 export type InstagramEvent =
   | { type: 'message'; data: IncomingMessage; timestamp?: number }
   | { type: 'messageEdit'; data: IncomingMessage & { messageId: string; newText: string }; timestamp?: number }
   | { type: 'messageUnsend'; data: IncomingMessage & { messageId: string }; timestamp?: number }
-  | { type: 'ready' | 'reconnected' | 'disconnected' | 'closed' | 'error' | 'raw' | 'typing' | 'presence' | 'reaction' | 'readReceipt' | 'threadUpdate' | 'unseenCount' | 'deviceDataChanged' | 'potential_message_gap'; data: ProviderObject; timestamp?: number };
+  | { type: 'threadUpdate'; data: ThreadUpdate; timestamp?: number }
+  | { type: 'ready' | 'reconnected' | 'disconnected' | 'closed' | 'error' | 'raw' | 'typing' | 'presence' | 'reaction' | 'readReceipt' | 'unseenCount' | 'deviceDataChanged' | 'potential_message_gap'; data: ProviderObject; timestamp?: number };
 export interface RealtimeEvents { event: InstagramEvent; state: ConnectionState; listenerError: InstagramError; }
 export interface ClientEvents extends RealtimeEvents { handlerError: import('./receiving.js').HandlerError; }
 export interface RealtimeController {
@@ -40,7 +46,7 @@ export interface MqttRealtimeOptions {
   maxPayloadBytes?: number; maxRecentMessages?: number; sendTimeout?: number; maxPendingSends?: number;
   getBootstrap?: (options: { signal: AbortSignal }) => IrisBootstrap | Promise<IrisBootstrap>;
 }
-export interface IrisBootstrap { sequenceId: Id; snapshotAtMs: number; deviceId: string; actorId: Id; }
+export interface IrisBootstrap { sequenceId: Id; snapshotAtMs: number; deviceId: string; actorId: Id; threads?: DirectThread[]; }
 export interface IrisSendOptions { replyToId?: string; replyToClientContext?: string; clientContext?: string; signal?: AbortSignal; }
 export interface IrisActivityResult { nativeThreadId: string; clientContext: string; active: boolean; deliveryStatus: 'acknowledged'; }
 export interface IrisSendResult extends ProviderObject { messageId: string; itemId?: string; nativeThreadId: string; clientContext: string; deliveryStatus: 'confirmed'; }

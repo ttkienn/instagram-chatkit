@@ -140,6 +140,21 @@ await message.replyAttachment({ attachmentId: uploaded.uploadId, type: 'image' }
 
 Reconnect is enabled by default for retryable failures. Avoid starting another connection on every `reconnecting` event. After `fatal` or `auth_required`, call `disconnectRealtime()` before starting a fresh listener; update expired cookies first.
 
+### Group changes
+
+`onThreadUpdate()` receives whole-thread snapshots and individual metadata patches from both Iris thread paths. `nativeThreadId` identifies the conversation, `change` is the patch operation, `property` is the relative field path for a partial update, and `raw` contains its value. Removals may have no value. Message items and read receipts remain separate events.
+
+```js
+client.onThreadUpdate(function (update) {
+  if (update.initial) return;
+  console.log('Thread changed:', update.nativeThreadId, update.property, update.change);
+});
+```
+
+On the first successful connection, inbox metadata is emitted with `initial: true` and `change: 'snapshot'` before buffered changes. Use these snapshots as a baseline; do not announce them as new members or group changes. The listener preserves the existing baseline on automatic reconnect and replays subsequent changes. A whole member list with no earlier baseline cannot identify who just joined or left.
+
+Applications can compare these fields with the baseline to produce name/theme, nickname, and membership notifications. Actors may be missing from metadata patches; do not treat an absent actor as the bot or another member.
+
 ### Stop the bot
 
 Use `await client.close()` on Ctrl+C or startup failure. Closing is idempotent, cancels HTTP/realtime work, and clears queued handlers; it does not log out or erase saved cookies. For a planned shutdown that finishes queued handlers, first `await client.disconnectRealtime()`, then `await client.waitForHandlers()`, then `await client.close()`. Create a new client after closing.

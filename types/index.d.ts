@@ -48,7 +48,7 @@ export class InstagramClient {
   onMessage: HandlerRegistration<ReceivedMessage>;
   onMessageEdit: HandlerRegistration<ReceivedMessage>;
   onMessageDelete: HandlerRegistration<ReceivedMessage>;
-  onThreadUpdate: HandlerRegistration<import('./common.js').ProviderObject>;
+  onThreadUpdate: HandlerRegistration<import('./realtime.js').ThreadUpdate>;
   onUnseenCount: HandlerRegistration<import('./common.js').ProviderObject>;
   onRawDelta: HandlerRegistration<import('./common.js').ProviderObject>;
   onHandlerError(handler: MessageHandler<HandlerError>): Unsubscribe;

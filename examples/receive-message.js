@@ -32,7 +32,19 @@ async function main() {
     }
   }
 
+  function handleEvent(event) {
+    if (event.type === 'raw') return;
+    if (event.type === 'threadUpdate') {
+      if (event.data.initial) return;
+      console.log('Group event:', event.data.nativeThreadId,
+        event.data.property || 'snapshot', event.data.change);
+      return;
+    }
+    console.log('Event:', event.type);
+  }
+
   client.onMessage(handleMessage);
+  client.on('event', handleEvent);
   client.onHandlerError(function (error) {
     console.error('Command failed:', error.cause?.code || error.code);
   });

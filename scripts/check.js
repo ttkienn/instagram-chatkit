@@ -19,3 +19,4 @@ for (const directory of ['src', 'examples', 'scripts']) await check(directory);
 console.log('JavaScript syntax checks passed.');
 await import('./check-replies.js');
 await import('./check-media-replies.js');
+await import('./check-thread-events.js');

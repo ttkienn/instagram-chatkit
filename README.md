@@ -75,7 +75,19 @@ async function main() {
     }
   }
 
+  function handleEvent(event) {
+    if (event.type === 'raw') return;
+    if (event.type === 'threadUpdate') {
+      if (event.data.initial) return;
+      console.log('Group event:', event.data.nativeThreadId,
+        event.data.property || 'snapshot', event.data.change);
+      return;
+    }
+    console.log('Event:', event.type);
+  }
+
   client.onMessage(handleMessage);
+  client.on('event', handleEvent);
   client.onHandlerError(function (error) {
     console.error('Command failed:', error.cause?.code || error.code);
   });
@@ -123,6 +135,8 @@ Press Ctrl+C to stop. This is the same code as [examples/receive-message.js](htt
 `logger: console` prints login, connection state, reconnect attempts, request failures, and handler errors. Records include safe metadata such as `event`, `code`, and HTTP status; they do not include cookies or message contents. `Command failed` prints the underlying reply error code. The bot closes on startup failure, Ctrl+C, or a terminal connection state.
 
 To change a reply, edit the strings in `handleMessage`. Add another `if` for a new command. `replyText` quotes the received message. Media replies such as `replyPhoto`, `replyVideo`, and `replyVoice` also need the original web MID; see [reply examples and limits](https://github.com/ttkienn/instagram-chatkit/blob/main/docs/DOCS.md).
+
+`handleEvent` catches SDK events through `client.on('event', ...)`. For `threadUpdate`, the log shows the thread, changed field, and patch operation. Typical fields are `thread_title` (name), `theme`/`theme_data` (theme), `nicknames` (nicknames), and `users` (members). Raw patches and initial snapshots are skipped in this log. To distinguish a join from a leave, store the initial members and compare later lists; `add/replace/remove` describe patch operations, not member actions. See [group changes](https://github.com/ttkienn/instagram-chatkit/blob/main/docs/DOCS.md#group-changes) for `onThreadUpdate()` and baseline handling. These metadata patches and initial snapshots require version 3.2.1 or newer.
 
 ## Documentation
 

@@ -73,7 +73,19 @@ async function main() {
     }
   }
 
+  function handleEvent(event) {
+    if (event.type === 'raw') return;
+    if (event.type === 'threadUpdate') {
+      if (event.data.initial) return;
+      console.log('Group event:', event.data.nativeThreadId,
+        event.data.property || 'snapshot', event.data.change);
+      return;
+    }
+    console.log('Event:', event.type);
+  }
+
   client.onMessage(handleMessage);
+  client.on('event', handleEvent);
   client.onHandlerError(function (error) {
     console.error('Command failed:', error.cause?.code || error.code);
   });
@@ -121,6 +133,8 @@ Nhấn Ctrl+C để dừng. Code giống [examples/receive-message.js](https://g
 `logger: console` ghi log đăng nhập, trạng thái kết nối, lần kết nối lại, lỗi request và lỗi xử lý lệnh. Log chỉ có thông tin như `event`, `code`, HTTP status; không có cookie hay nội dung tin nhắn. Dòng `Command failed` hiển thị mã lỗi gốc của thao tác reply. Bot đóng kết nối khi khởi động lỗi, nhấn Ctrl+C hoặc kết nối dừng ở trạng thái cuối.
 
 Muốn đổi câu trả lời, sửa chuỗi trong `handleMessage`. Muốn thêm lệnh, thêm một `if`. `replyText` trích dẫn tin nhắn đang nhận. Reply ảnh, video, voice qua `replyPhoto`, `replyVideo`, `replyVoice` còn cần web MID của tin gốc; xem [ví dụ và giới hạn reply](https://github.com/ttkienn/instagram-chatkit/blob/main/docs/DOCS.md).
+
+`handleEvent` bắt event SDK qua `client.on('event', ...)`. Với `threadUpdate`, log cho biết nhóm, trường thay đổi và thao tác patch. Các trường thường gặp là `thread_title` (tên), `theme`/`theme_data` (chủ đề), `nicknames` (biệt danh), `users` (thành viên). Ví dụ bỏ qua raw patch và snapshot ban đầu khi ghi log. Để phân biệt người vào/rời nhóm, cần lưu danh sách thành viên ban đầu rồi so với danh sách mới; `add/replace/remove` chỉ là thao tác patch. Xem [thay đổi nhóm](https://github.com/ttkienn/instagram-chatkit/blob/main/docs/DOCS.md#group-changes) để dùng `onThreadUpdate()` và xử lý mốc ban đầu. Phần metadata patch và snapshot ban đầu cần phiên bản 3.2.1 trở lên.
 
 ## Tài liệu
 

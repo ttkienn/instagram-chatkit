@@ -55,10 +55,14 @@ function timestampMs(value) {
 
 export function normalizeDelta(delta) {
   if (!object(delta) || !['add', 'replace', 'remove'].includes(delta.op)) return null;
-  const thread = /^\/direct_v2\/inbox\/threads\/([1-9]\d{0,511})$/.exec(delta.path);
-  if (thread && (delta.op === 'remove' || object(delta.value))) {
+  const thread = /^\/direct_v2\/(?:inbox\/)?threads\/([1-9]\d{0,511})(?:\/(.+))?$/.exec(delta.path);
+  const propertyPath = thread?.[2];
+  if (thread && !/^(?:items|last_seen_at)(?:\/|$)/.test(propertyPath ?? '') &&
+      !/^participants\/[^/]+\/has_seen(?:\/|$)/.test(propertyPath ?? '') &&
+      (propertyPath || delta.op === 'remove' || object(delta.value))) {
     return { type: 'threadUpdate', data: { id: thread[1], threadId: thread[1], nativeThreadId: thread[1],
-      change: delta.op, raw: delta.value } };
+      change: delta.op, ...(propertyPath ? { property: propertyPath } : {}),
+      ...(delta.sequence !== undefined ? { sequence: delta.sequence } : {}), raw: delta.value } };
   }
   if (delta.path === '/direct_v2/inbox/unseen_count' && delta.op !== 'remove') {
     const count = object(delta.value) ? delta.value.count : delta.value;

@@ -44,6 +44,8 @@ Use Node.js 24 or newer. Public entry points are `instagram-chatkit`, `instagram
 
 The receiving queue is bounded and processed in order. `client.on('event', ...)` is the lower-level EventEmitter interface; it does not await or catch exceptions from your async event callbacks. Prefer `onMessage()` for command handlers. Fetching `threads.history()` returns data directly and does not replay it through the receiving queue.
 
+The Iris bootstrap also retains inbox thread metadata. On the listener's first successful subscription, it emits initial `threadUpdate` snapshots before buffered patches so consumers can compare later member/name changes against an existing baseline. Automatic reconnect keeps that baseline and replays changes from the last applied sequence. Nested non-message patches retain their relative `property`, operation, sequence, and raw value; they are not discarded just because their value is a string or array. Message paths and read receipts are handled separately.
+
 ## How replies are sent
 
 `ReceivedMessage` binds a reply to its original message and checks that the client still uses the same account session:
@@ -79,7 +81,7 @@ npm run verify
 
 | Command | Checks |
 | --- | --- |
-| `npm run check` | Module boundaries, JavaScript syntax, text reply checks, and media reply checks |
+| `npm run check` | Module boundaries, JavaScript syntax, text/media replies, and thread event/bootstrap checks |
 | `npm run check:types` | TypeScript consumer fixture against public declarations |
 | `npm run check:package` | Packed file list, fresh tarball installation, public imports, and runtime/TypeScript consumer checks |
 
